@@ -117,7 +117,12 @@ function createOneTierItem(item) {
   img.alt = item.name;
   img.title = item.name;
   img.draggable = true;
+  img.addEventListener('touchmove', noTouchMove);
   return img;
+}
+  
+function noTouchMove(e) {
+  e.preventDefault();
 }
 
 async function loadList() {
