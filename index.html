@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Live A Hero Tier Maker</title>
+<link rel="stylesheet" type="text/css"  href="dragula.min.css">
+<style>
+html, body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+main {
+  width: 800px;
+  margin: auto;
+}
+#tierlist {
+  display: grid;
+  grid-template-columns: minmax(64px, min-content) auto;
+  margin-bottom: 60px;
+}
+.tier-name {
+  font-size: 40px;
+  padding: 5px;
+  text-align: center;
+}
+.tier-holder {
+  background: #222;
+  min-height: 64px;
+}
+#tier-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 64px);
+  margin-bottom: 60px;
+}
+.tier-item {
+  width: 64px;
+  height: 64px;
+  cursor: grab;
+}
+#json-output {
+  min-width: 100%;
+  height: 300px;
+}
+</style>
+</head>
+
+<body>
+
+<template id="tier">
+<div class="tier-name" contenteditable="true"></div>
+<div class="tier-holder"></div>
+</template>
+
+<main>
+
+<h1>Live A Hero Tier Maker</h1>
+
+<p>Drag and drop the character icons to the list. Tier name can be directly edited.</p>
+
+<div id="tierlist"></div>
+
+<div id="tier-items"></div>
+
+<fieldset>
+<legend>Save progress</legend>
+
+<p>
+<button id="save">Save</button>
+<button id="import">Import</button>
+</p>
+
+<p>You can manually add tier, change tier color and do many other things with the JSON code. You may use any valid CSS color syntax.</p>
+
+<textarea id="json-output"></textarea>
+
+</fieldset>
+
+
+</main>
+
+</body>
+
+<script src='dragula.min.js'></script>
+<script>
+const $ = document.querySelector.bind(document);
+const tierlist = $("#tierlist");
+const tierItems = $("#tier-items");
+const tierTpl = $("#tier");
+let tierUnitDrake;
+let backupUnitsMap;
+
+function createTierList(tiers) {
+  for (const info of tiers) {
+    createOneTier(info);
+  }
+}
+
+function createOneTier(info) {
+  const tier = tierTpl.content.cloneNode(true);
+  tier.firstElementChild.textContent = info.name;
+  tier.firstElementChild.style.backgroundColor = info.color;
+  tierUnitDrake.containers.push(tier.firstElementChild.nextElementSibling);
+  tierlist.appendChild(tier);
+}
+
+function createTierItems(items) {
+  for (const item of items) {
+    tierItems.appendChild(createOneTierItem(item));
+  }
+}
+
+function createOneTierItem(item) {
+  const img = new Image();
+  img.classList.add("tier-item");
+  img.src = item.url;
+  img.alt = item.name;
+  img.title = item.name;
+  img.draggable = true;
+  return img;
+}
+
+async function loadList() {
+  // To all the hackers out there, you just need to modify this function...
+  // You can just hardcode it, or fetch from external source then do some processing
+
+  const dataUrl = "https://liveahero-wiki.github.io/api/card.json";
+  const array = [];
+
+  let res = await fetch(dataUrl);
+  let data = await res.json();
+
+  for (let k in data) {
+    let unit = data[k];
+    array.push({
+      name: unit.cardName,
+      url: `https://liveahero-wiki.github.io/cdn/Sprite/icon_${unit.resourceName}_s01.png`,
+    })
+  }
+
+  return array
+}
+
+async function main() {
+  tierUnitDrake = dragula();
+  tierUnitDrake.containers.push(tierItems);
+
+  const array = await loadList();
+  createTierItems(array);
+  backupUnitsMap = new Map()
+  for (const unit of array) {
+    backupUnitsMap.set(unit.name, unit.url);
+  }
+
+  createTierList([
+    {name: "S", color: "red"},
+    {name: "A", color: "orange"},
+    {name: "B", color: "yellow"},
+    {name: "C", color: "green"},
+    {name: "D", color: "blue"},
+  ]);  
+}
+main();
+
+const textarea = $("#json-output");
+
+$("#import").addEventListener("click", function() {
+  const config = JSON.parse(textarea.value);
+
+  // Reset
+  tierUnitDrake.containers = [];
+  tierlist.innerHTML = "";
+  tierItems.innerHTML = "";
+
+  createTierList(config);
+  const holders = tierlist.querySelectorAll(".tier-holder");
+  
+  const usedNames = new Set();
+  for (let i = 0; i < config.length; i++) {
+    const frag = new DocumentFragment();
+    for (const item of config[i].children) {
+      const url = backupUnitsMap.get(item.name);
+      const img = createOneTierItem({name: item.name, url: url});
+      frag.appendChild(img);
+      usedNames.add(item.name);
+    }
+    holders[i].appendChild(frag);
+  }
+
+  const frag = new DocumentFragment();
+  for (const [k, v] of backupUnitsMap) {
+    if (usedNames.has(k)) continue;
+
+    const img = createOneTierItem({name: k, url: v});
+    frag.appendChild(img);
+  }
+  tierItems.appendChild(frag);
+  tierUnitDrake.containers.push(tierItems);
+});
+
+$("#save").addEventListener("click", function() {
+  const config = [];
+
+  const names = tierlist.querySelectorAll(".tier-name");
+  const holders = tierlist.querySelectorAll(".tier-holder");
+
+  for (let i = 0; i < names.length; i++) {
+    const children = [];
+    for (const img of holders[i].children) {
+      children.push({name: img.title});
+    }
+
+    config.push({
+      name: names[i].textContent,
+      color: names[i].style.backgroundColor,
+      children: children,
+    });
+  }
+
+  textarea.value = JSON.stringify(config, null, 2);
+});
+
+</script>
+
+</html>
